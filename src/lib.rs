@@ -4,6 +4,8 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
+mod tests;
+
 /// Holds the output for a command
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CmdOutput {
@@ -122,7 +124,7 @@ pub fn run(command: &mut Command) -> CmdOutput {
 
     let mut lines = stdout_rx.into_iter().collect::<Vec<Line>>();
     lines.append(&mut stderr_rx.into_iter().collect::<Vec<Line>>());
-    lines.sort();
+    //lines.sort();
 
     return CmdOutput {
         lines: lines,
