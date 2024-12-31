@@ -1,8 +1,6 @@
 # better-commands
 
-A better way of running commands.
-
-`better-commands` allows you to run commands with both `stdout` and `stderr` properly, with command duration and timestamps for each line built-in.
+A better way of running commands - get stdout and stderr together, in order with timestamps, while easily running code as the command runs line-by-line.
 
 ## TODO
 

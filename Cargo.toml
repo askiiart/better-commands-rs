@@ -1,6 +1,6 @@
 [package]
 name = "better-commands"
-description = "Better commands - get stdout and stderr together, with timestamps"
+description = "A better way of running commands - get stdout and stderr together, in order with timestamps, while easily running code as it runs line-by-line"
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-only"
