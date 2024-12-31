@@ -59,7 +59,6 @@ impl CmdOutput {
         return self.status;
     }
 
-
     /// Returns the duration the command ran for
     pub fn duration(self) -> Duration {
         return self.end_time.duration_since(self.start_time);
@@ -111,7 +110,7 @@ pub fn run(command: &mut Command) -> CmdOutput {
             stderr_tx
                 .send(Line {
                     content: line.unwrap(),
-                    stdout: true,
+                    stdout: false,
                     time: time,
                 })
                 .unwrap();
