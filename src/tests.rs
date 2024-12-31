@@ -1,7 +1,6 @@
+#[cfg(test)]
 use crate::*;
 use std::hash::{BuildHasher, Hasher, RandomState};
-
-#[cfg(test)]
 
 /// Tests what stdout prints
 #[test]
@@ -69,7 +68,7 @@ fn test_output_is_sorted_sort_works() {
 }
 
 // https://stackoverflow.com/a/78840539/16432246
-// with rand::seq::SliceRandom and you can shuffle a Vec, but doing this to avoid introducing a ton of dependencies for one little test
+// with rand::seq::SliceRandom you can shuffle a Vec, but doing this to avoid introducing a ton of dependencies for one little test
 fn shuffle_vec<T>(vec: &mut [T]) {
     let n: usize = vec.len();
     for i in 0..(n - 1) {
