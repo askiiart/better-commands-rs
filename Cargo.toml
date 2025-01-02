@@ -5,3 +5,6 @@ version = "0.1.1"
 edition = "2021"
 license = "GPL-3.0-only"
 keywords = ["command", "cmd"]
+
+[profile.release]
+opt-level = 3
