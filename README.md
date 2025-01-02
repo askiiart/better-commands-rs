@@ -5,5 +5,4 @@ A better way of running commands - get stdout and stderr together, in order with
 ## TODO
 
 - Improve docs
-- Add `Fn`/`FnOnce`/whatever for what code to run in the `stdout`/`stderr` loops, similar to `.map()`
-- Add tests
+- Add `lines` capability to `run_with_funcs()`
