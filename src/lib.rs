@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
-use std::io::{BufRead, BufReader};
-use std::process::{Command, Stdio};
+use std::io::{BufRead, BufReader, Lines};
+use std::process::{ChildStderr, ChildStdout, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -9,61 +9,71 @@ mod tests;
 /// Holds the output for a command
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CmdOutput {
-    lines: Vec<Line>,
-    status: Option<i32>,
+    lines: Option<Vec<Line>>,
+    status_code: Option<i32>,
     start_time: Instant,
     end_time: Instant,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Ord)]
-pub struct Line {
-    pub stdout: bool,
-    pub time: Instant,
-    pub content: String,
+    duration: Duration,
 }
 
 impl CmdOutput {
     /// Returns only stdout
-    pub fn stdout(self) -> Vec<Line> {
-        return self
-            .lines
-            .into_iter()
-            .filter(|l| {
-                if l.stdout {
-                    return true;
-                }
-                return false;
-            })
-            .collect();
+    pub fn stdout(self) -> Option<Vec<Line>> {
+        match self.lines {
+            Some(lines) => {
+                return Some(
+                    lines
+                        .into_iter()
+                        .filter(|l| {
+                            if l.printed_to == LineType::Stdout {
+                                return true;
+                            }
+                            return false;
+                        })
+                        .collect(),
+                );
+            }
+            None => {
+                return None;
+            }
+        }
     }
 
     /// Returns only stdout
-    pub fn stderr(self) -> Vec<Line> {
-        return self
-            .lines
-            .into_iter()
-            .filter(|l| {
-                if !l.stdout {
-                    return true;
-                }
-                return false;
-            })
-            .collect();
+    pub fn stderr(self) -> Option<Vec<Line>> {
+        match self.lines {
+            Some(lines) => {
+                return Some(
+                    lines
+                        .into_iter()
+                        .filter(|l| {
+                            if l.printed_to == LineType::Stderr {
+                                return true;
+                            }
+                            return false;
+                        })
+                        .collect(),
+                );
+            }
+            None => {
+                return None;
+            }
+        }
     }
 
     /// Returns all output
-    pub fn lines(self) -> Vec<Line> {
+    pub fn lines(self) -> Option<Vec<Line>> {
         return self.lines;
     }
 
     /// Returns the exit status code, if there was one
-    pub fn status(self) -> Option<i32> {
-        return self.status;
+    pub fn status_code(self) -> Option<i32> {
+        return self.status_code;
     }
 
     /// Returns the duration the command ran for
     pub fn duration(self) -> Duration {
-        return self.end_time.duration_since(self.start_time);
+        return self.duration;
     }
 
     /// Returns the time the command was started at
@@ -77,61 +87,21 @@ impl CmdOutput {
     }
 }
 
-pub fn run(command: &mut Command) -> CmdOutput {
-    // https://stackoverflow.com/a/72831067/16432246
-    let start = Instant::now();
-    let mut child = command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+/// Specifies what a line was printed to - stdout or stderr
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LineType {
+    Stdout,
+    Stderr,
+}
 
-    let child_stdout = child.stdout.take().unwrap();
-    let child_stderr = child.stderr.take().unwrap();
-
-    let (stdout_tx, stdout_rx) = std::sync::mpsc::channel();
-    let (stderr_tx, stderr_rx) = std::sync::mpsc::channel();
-
-    let stdout_lines = BufReader::new(child_stdout).lines();
-    thread::spawn(move || {
-        for line in stdout_lines {
-            stdout_tx
-                .send(Line {
-                    content: line.unwrap(),
-                    stdout: true,
-                    time: Instant::now(),
-                })
-                .unwrap();
-        }
-    });
-
-    let stderr_lines = BufReader::new(child_stderr).lines();
-    thread::spawn(move || {
-        for line in stderr_lines {
-            let time = Instant::now();
-            stderr_tx
-                .send(Line {
-                    content: line.unwrap(),
-                    stdout: false,
-                    time: time,
-                })
-                .unwrap();
-        }
-    });
-
-    let status = child.wait().unwrap().code();
-    let end = Instant::now();
-
-    let mut lines = stdout_rx.into_iter().collect::<Vec<Line>>();
-    lines.append(&mut stderr_rx.into_iter().collect::<Vec<Line>>());
-    //lines.sort();
-
-    return CmdOutput {
-        lines: lines,
-        status: status,
-        start_time: start,
-        end_time: end,
-    };
+/// A single line from the output of a command
+///
+/// This contains what the line was printed to (stdout/stderr), a timestamp, and the content of course.
+#[derive(Debug, Clone, PartialEq, Eq, Ord)]
+pub struct Line {
+    pub printed_to: LineType,
+    pub time: Instant,
+    pub content: String,
 }
 
 impl PartialOrd for Line {
@@ -172,4 +142,112 @@ impl PartialOrd for Line {
         }
         return Some(Ordering::Equal);
     }
+}
+
+/// Runs a command, returning a
+///
+/// Example:
+///
+/// ```
+/// use better_commands::run;
+/// use std::process::Command;
+/// let cmd = run(&mut Command::new("echo").arg("hi"));
+///
+/// // prints the following: [Line { printed_to: Stdout, time: Instant { tv_sec: 16316, tv_nsec: 283884648 }, content: "hi" }]
+/// // (timestamp varies)
+/// println!("{:?}", cmd.lines().unwrap());
+/// ```
+pub fn run(command: &mut Command) -> CmdOutput {
+    // https://stackoverflow.com/a/72831067/16432246
+    let start = Instant::now();
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    let child_stdout = child.stdout.take().unwrap();
+    let child_stderr = child.stderr.take().unwrap();
+
+    let (stdout_tx, stdout_rx) = std::sync::mpsc::channel();
+    let (stderr_tx, stderr_rx) = std::sync::mpsc::channel();
+
+    let stdout_lines = BufReader::new(child_stdout).lines();
+    thread::spawn(move || {
+        for line in stdout_lines {
+            stdout_tx
+                .send(Line {
+                    content: line.unwrap(),
+                    printed_to: LineType::Stdout,
+                    time: Instant::now(),
+                })
+                .unwrap();
+        }
+    });
+
+    let stderr_lines = BufReader::new(child_stderr).lines();
+    thread::spawn(move || {
+        for line in stderr_lines {
+            let time = Instant::now();
+            stderr_tx
+                .send(Line {
+                    content: line.unwrap(),
+                    printed_to: LineType::Stderr,
+                    time: time,
+                })
+                .unwrap();
+        }
+    });
+
+    let status = child.wait().unwrap().code();
+    let end = Instant::now();
+
+    let mut lines = stdout_rx.into_iter().collect::<Vec<Line>>();
+    lines.append(&mut stderr_rx.into_iter().collect::<Vec<Line>>());
+    //lines.sort();
+
+    return CmdOutput {
+        lines: Some(lines),
+        status_code: status,
+        start_time: start,
+        end_time: end,
+        duration: end.duration_since(start),
+    };
+}
+
+pub fn run_with_funcs(
+    command: &mut Command,
+    stdout_func: impl Fn(Lines<BufReader<ChildStdout>>) -> () + std::marker::Send + 'static,
+    stderr_func: impl Fn(Lines<BufReader<ChildStderr>>) -> () + std::marker::Send + 'static,
+) -> CmdOutput {
+    // https://stackoverflow.com/a/72831067/16432246
+    let start = Instant::now();
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    let child_stdout = child.stdout.take().unwrap();
+    let child_stderr = child.stderr.take().unwrap();
+
+    let stdout_lines = BufReader::new(child_stdout).lines();
+    let stdout_thread = thread::spawn(move || stdout_func(stdout_lines));
+
+    let stderr_lines = BufReader::new(child_stderr).lines();
+    let stderr_thread = thread::spawn(move || stderr_func(stderr_lines));
+
+    let status = child.wait().unwrap().code();
+    let end = Instant::now();
+
+    stdout_thread.join().unwrap();
+    stderr_thread.join().unwrap();
+
+    return CmdOutput {
+        lines: None,
+        status_code: status,
+        start_time: start,
+        end_time: end,
+        duration: end.duration_since(start),
+    };
 }

@@ -1,6 +1,11 @@
 #[cfg(test)]
 use crate::*;
-use std::hash::{BuildHasher, Hasher, RandomState};
+use std::{
+    fs::remove_file,
+    hash::{BuildHasher, Hasher, RandomState},
+};
+use std::{fs::File, os::unix::fs::FileExt, thread::sleep};
+use std::process::Command;
 
 /// Tests what stdout prints
 #[test]
@@ -14,6 +19,7 @@ fn stdout_content() {
                 .arg("-n")
                 .arg("helloooooooooo\nhiiiiiiiiiiiii"))
             .stdout()
+            .unwrap()
             .into_iter()
             .map(|line| { line.content })
             .collect::<Vec<String>>()
@@ -24,20 +30,18 @@ fn stdout_content() {
 /// Tests what stderr prints
 #[test]
 fn stderr_content() {
-    let expected = "[\"helloooooooooo\", \"hiiiiiiiiiiiii\"]";
+    let expected = vec!["helloooooooooo", "hiiiiiiiiiiiii"];
     // `>&2` redirects to stderr
     assert_eq!(
         expected,
-        format!(
-            "{:?}",
             run(&mut Command::new("bash")
                 .arg("-c")
                 .arg("echo -n 'helloooooooooo\nhiiiiiiiiiiiii' >&2"))
             .stderr()
+            .unwrap()
             .into_iter()
             .map(|line| { line.content })
             .collect::<Vec<String>>()
-        )
     );
 }
 
@@ -49,7 +53,7 @@ fn test_exit_code() {
     assert_eq!(
         expected,
         run(&mut Command::new("bash").arg("-c").arg("exit 10"))
-            .status()
+            .status_code()
             .unwrap()
     );
 }
@@ -57,7 +61,11 @@ fn test_exit_code() {
 /// Tests that the output is sorted by default
 #[test]
 fn test_output_is_sorted_sort_works() {
-    let cmd = run(&mut Command::new("bash").arg("-c").arg("echo hi; sleep 0.01; echo hi; sleep 0.01; echo hi; sleep 0.01; echo hi; sleep 0.01; echo hi; sleep 0.01; echo hi; sleep 0.01; echo hi; sleep 0.01; echo hi; sleep 0.01; echo hi; sleep 0.01; echo hi")).stdout();
+    let cmd = run(&mut Command::new("bash")
+        .arg("-c")
+        .arg("echo hi; echo hi; echo hi; echo hi; echo hi"))
+    .stdout()
+    .unwrap();
     let mut sorted = cmd.clone();
     // To avoid an accidental bogosort
     while sorted.is_sorted() {
@@ -77,4 +85,53 @@ fn shuffle_vec<T>(vec: &mut [T]) {
         let j = (RandomState::new().build_hasher().finish() as usize) % (n - i) + i;
         vec.swap(i, j);
     }
+}
+
+#[test]
+fn test_run_with_funcs() {
+    let _ = thread::spawn(|| {
+        let _ = run_with_funcs(
+            Command::new("bash")
+                .arg("-c")
+                .arg("echo hi; sleep 0.5; >&2 echo hello"),
+            {
+                |stdout_lines| {
+                    sleep(Duration::from_secs(1));
+                    for _ in stdout_lines {
+                        Command::new("bash")
+                            .arg("-c")
+                            .arg("echo stdout >> ./tmp")
+                            .output()
+                            .unwrap();
+                    }
+                }
+            },
+            {
+                |stderr_lines| {
+                    sleep(Duration::from_secs(3));
+                    for _ in stderr_lines {
+                        Command::new("bash")
+                            .arg("-c")
+                            .arg("echo stderr >> ./tmp")
+                            .output()
+                            .unwrap();
+                    }
+                }
+            },
+        );
+    });
+    sleep(Duration::from_secs(2));
+    let f = File::open("./tmp").unwrap();
+    let mut buf: [u8; 14] = [0u8; 14];
+    f.read_at(&mut buf, 0).unwrap();
+    assert_eq!(buf, [115, 116, 100, 111, 117, 116, 10, 0, 0, 0, 0, 0, 0, 0]);
+
+    sleep(Duration::from_secs(2));
+    f.read_at(&mut buf, 0).unwrap();
+    assert_eq!(
+        buf,
+        [115, 116, 100, 111, 117, 116, 10, 115, 116, 100, 101, 114, 114, 10]
+    );
+
+    remove_file("./tmp").unwrap();
 }
