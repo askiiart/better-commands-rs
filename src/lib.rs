@@ -19,46 +19,26 @@ pub struct CmdOutput {
 impl CmdOutput {
     /// Returns only stdout
     pub fn stdout(self) -> Option<Vec<Line>> {
-        match self.lines {
-            Some(lines) => {
-                return Some(
-                    lines
-                        .into_iter()
-                        .filter(|l| {
-                            if l.printed_to == LineType::Stdout {
-                                return true;
-                            }
-                            return false;
-                        })
-                        .collect(),
-                );
-            }
-            None => {
-                return None;
-            }
-        }
+        self.lines.and_then(|lines| {
+            Some(
+                lines
+                    .into_iter()
+                    .filter(|line| line.printed_to == LineType::Stdout)
+                    .collect(),
+            )
+        })
     }
 
     /// Returns only stdout
     pub fn stderr(self) -> Option<Vec<Line>> {
-        match self.lines {
-            Some(lines) => {
-                return Some(
-                    lines
-                        .into_iter()
-                        .filter(|l| {
-                            if l.printed_to == LineType::Stderr {
-                                return true;
-                            }
-                            return false;
-                        })
-                        .collect(),
-                );
-            }
-            None => {
-                return None;
-            }
-        }
+        self.lines.and_then(|lines| {
+            Some(
+                lines
+                    .into_iter()
+                    .filter(|line| line.printed_to == LineType::Stderr)
+                    .collect(),
+            )
+        })
     }
 
     /// Returns all output
