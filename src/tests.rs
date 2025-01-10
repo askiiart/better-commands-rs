@@ -88,19 +88,19 @@ fn shuffle_vec<T>(vec: &mut [T]) {
 }
 
 #[test]
-fn test_run_with_funcs() {
+fn test_run_funcs() {
     let _ = thread::spawn(|| {
-        let _ = run_with_funcs(
+        let _ = run_funcs(
             Command::new("bash")
                 .arg("-c")
-                .arg("echo hi; sleep 0.5; >&2 echo hello"),
+                .arg("echo hi; >&2 echo hello"),
             {
                 |stdout_lines| {
                     sleep(Duration::from_secs(1));
                     for _ in stdout_lines {
                         Command::new("bash")
                             .arg("-c")
-                            .arg("echo stdout >> ./tmp")
+                            .arg("echo stdout >> ./tmp-run_runcs")
                             .output()
                             .unwrap();
                     }
@@ -112,7 +112,7 @@ fn test_run_with_funcs() {
                     for _ in stderr_lines {
                         Command::new("bash")
                             .arg("-c")
-                            .arg("echo stderr >> ./tmp")
+                            .arg("echo stderr >> ./tmp-run_runcs")
                             .output()
                             .unwrap();
                     }
@@ -121,7 +121,7 @@ fn test_run_with_funcs() {
         );
     });
     sleep(Duration::from_secs(2));
-    let f = File::open("./tmp").unwrap();
+    let f = File::open("./tmp-run_runcs").unwrap();
     let mut buf: [u8; 14] = [0u8; 14];
     f.read_at(&mut buf, 0).unwrap();
     assert_eq!(buf, [115, 116, 100, 111, 117, 116, 10, 0, 0, 0, 0, 0, 0, 0]);
@@ -133,5 +133,58 @@ fn test_run_with_funcs() {
         [115, 116, 100, 111, 117, 116, 10, 115, 116, 100, 101, 114, 114, 10]
     );
 
-    remove_file("./tmp").unwrap();
+    remove_file("./tmp-run_runcs").unwrap();
+}
+
+#[test]
+fn test_run_funcs_with_lines() {
+    let _ = thread::spawn(|| {
+        let _ = run_funcs_with_lines(
+            Command::new("bash")
+                .arg("-c")
+                .arg("echo hi; >&2 echo hello"),
+            {
+                |stdout_lines| {
+                    sleep(Duration::from_secs(1));
+                    for line in stdout_lines {
+                        assert_eq!(line.unwrap(), "hi");
+                        Command::new("bash")
+                            .arg("-c")
+                            .arg("echo stdout >> ./tmp-run_runcs_with_lines")
+                            .output()
+                            .unwrap();
+                    }
+                    return Vec::new();
+                }
+            },
+            {
+                |stderr_lines| {
+                    sleep(Duration::from_secs(3));
+                    for line in stderr_lines {
+                        assert_eq!(line.unwrap(), "hello");
+                        Command::new("bash")
+                            .arg("-c")
+                            .arg("echo stderr >> ./tmp-run_runcs_with_lines")
+                            .output()
+                            .unwrap();
+                    }
+                    return Vec::new();
+                }
+            },
+        );
+    });
+    sleep(Duration::from_secs(2));
+    let f = File::open("./tmp-run_runcs_with_lines").unwrap();
+    let mut buf: [u8; 14] = [0u8; 14];
+    f.read_at(&mut buf, 0).unwrap();
+    assert_eq!(buf, [115, 116, 100, 111, 117, 116, 10, 0, 0, 0, 0, 0, 0, 0]);
+
+    sleep(Duration::from_secs(2));
+    f.read_at(&mut buf, 0).unwrap();
+    assert_eq!(
+        buf,
+        [115, 116, 100, 111, 117, 116, 10, 115, 116, 100, 101, 114, 114, 10]
+    );
+
+    remove_file("./tmp-run_runcs_with_lines").unwrap();
 }

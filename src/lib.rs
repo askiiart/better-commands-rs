@@ -195,7 +195,7 @@ pub fn run(command: &mut Command) -> CmdOutput {
     };
 }
 
-pub fn run_with_funcs(
+pub fn run_funcs(
     command: &mut Command,
     stdout_func: impl Fn(Lines<BufReader<ChildStdout>>) -> () + std::marker::Send + 'static,
     stderr_func: impl Fn(Lines<BufReader<ChildStderr>>) -> () + std::marker::Send + 'static,
@@ -225,6 +225,45 @@ pub fn run_with_funcs(
 
     return CmdOutput {
         lines: None,
+        status_code: status,
+        start_time: start,
+        end_time: end,
+        duration: end.duration_since(start),
+    };
+}
+
+pub fn run_funcs_with_lines(
+    command: &mut Command,
+    stdout_func: impl Fn(Lines<BufReader<ChildStdout>>) -> Vec<Line> + std::marker::Send + 'static,
+    stderr_func: impl Fn(Lines<BufReader<ChildStderr>>) -> Vec<Line> + std::marker::Send + 'static,
+) -> CmdOutput {
+    // https://stackoverflow.com/a/72831067/16432246
+    let start = Instant::now();
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    let child_stdout = child.stdout.take().unwrap();
+    let child_stderr = child.stderr.take().unwrap();
+
+    let stdout_lines = BufReader::new(child_stdout).lines();
+    let stderr_lines = BufReader::new(child_stderr).lines();
+
+    let stdout_thread = thread::spawn(move || stdout_func(stdout_lines));
+    let stderr_thread = thread::spawn(move || stderr_func(stderr_lines));
+
+    let mut lines = stdout_thread.join().unwrap();
+    let mut lines_printed_to_stderr = stderr_thread.join().unwrap();
+    lines.append(&mut lines_printed_to_stderr);
+    lines.sort();
+
+    let status = child.wait().unwrap().code();
+    let end = Instant::now();
+
+    return CmdOutput {
+        lines: Some(lines),
         status_code: status,
         start_time: start,
         end_time: end,
