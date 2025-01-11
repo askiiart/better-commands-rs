@@ -1,11 +1,24 @@
 #[cfg(test)]
 use crate::*;
+use std::process::Command;
 use std::{
     fs::remove_file,
     hash::{BuildHasher, Hasher, RandomState},
 };
 use std::{fs::File, os::unix::fs::FileExt, thread::sleep};
-use std::process::Command;
+use crate::command;
+
+#[macro_export]
+macro_rules! command {
+    ($command:expr, $($args:expr),*) => {
+        {
+            Command::new($command)
+            $(
+                .arg($args)
+            )*
+        }
+    };
+}
 
 /// Tests what stdout prints
 #[test]
@@ -34,14 +47,14 @@ fn stderr_content() {
     // `>&2` redirects to stderr
     assert_eq!(
         expected,
-            run(&mut Command::new("bash")
-                .arg("-c")
-                .arg("echo -n 'helloooooooooo\nhiiiiiiiiiiiii' >&2"))
-            .stderr()
-            .unwrap()
-            .into_iter()
-            .map(|line| { line.content })
-            .collect::<Vec<String>>()
+        run(&mut Command::new("bash")
+            .arg("-c")
+            .arg("echo -n 'helloooooooooo\nhiiiiiiiiiiiii' >&2"))
+        .stderr()
+        .unwrap()
+        .into_iter()
+        .map(|line| { line.content })
+        .collect::<Vec<String>>()
     );
 }
 
@@ -89,8 +102,8 @@ fn shuffle_vec<T>(vec: &mut [T]) {
 
 #[test]
 fn test_run_funcs() {
-    let _ = thread::spawn(|| {
-        let _ = run_funcs(
+    let threads = thread::spawn(|| {
+        return run_funcs(
             Command::new("bash")
                 .arg("-c")
                 .arg("echo hi; >&2 echo hello"),
@@ -98,9 +111,7 @@ fn test_run_funcs() {
                 |stdout_lines| {
                     sleep(Duration::from_secs(1));
                     for _ in stdout_lines {
-                        Command::new("bash")
-                            .arg("-c")
-                            .arg("echo stdout >> ./tmp-run_runcs")
+                        command!("bash", "-c", "echo stdout >> ./tmp-run_funcs") // col
                             .output()
                             .unwrap();
                     }
@@ -110,9 +121,7 @@ fn test_run_funcs() {
                 |stderr_lines| {
                     sleep(Duration::from_secs(3));
                     for _ in stderr_lines {
-                        Command::new("bash")
-                            .arg("-c")
-                            .arg("echo stderr >> ./tmp-run_runcs")
+                        command!("bash", "-c", "echo stderr >> ./tmp-run_funcs") // col
                             .output()
                             .unwrap();
                     }
@@ -121,7 +130,7 @@ fn test_run_funcs() {
         );
     });
     sleep(Duration::from_secs(2));
-    let f = File::open("./tmp-run_runcs").unwrap();
+    let f = File::open("./tmp-run_funcs").unwrap();
     let mut buf: [u8; 14] = [0u8; 14];
     f.read_at(&mut buf, 0).unwrap();
     assert_eq!(buf, [115, 116, 100, 111, 117, 116, 10, 0, 0, 0, 0, 0, 0, 0]);
@@ -133,48 +142,53 @@ fn test_run_funcs() {
         [115, 116, 100, 111, 117, 116, 10, 115, 116, 100, 101, 114, 114, 10]
     );
 
-    remove_file("./tmp-run_runcs").unwrap();
+    remove_file("./tmp-run_funcs").unwrap();
+
+    let output = threads.join().unwrap();
+    assert_eq!(output.clone().lines(), None);
 }
 
 #[test]
 fn test_run_funcs_with_lines() {
-    let _ = thread::spawn(|| {
-        let _ = run_funcs_with_lines(
+    let threads = thread::spawn(|| {
+        return run_funcs_with_lines(
             Command::new("bash")
                 .arg("-c")
                 .arg("echo hi; >&2 echo hello"),
             {
                 |stdout_lines| {
+                    let mut lines: Vec<Line> = Vec::new();
                     sleep(Duration::from_secs(1));
                     for line in stdout_lines {
-                        assert_eq!(line.unwrap(), "hi");
-                        Command::new("bash")
-                            .arg("-c")
-                            .arg("echo stdout >> ./tmp-run_runcs_with_lines")
+                        let line = line.unwrap();
+                        lines.push(Line::from_stdout(&line));
+                        assert_eq!(&line, "hi");
+                        command!("bash", "-c", "echo stdout >> ./tmp-run_funcs_with_lines")
                             .output()
                             .unwrap();
                     }
-                    return Vec::new();
+                    return lines;
                 }
             },
             {
                 |stderr_lines| {
+                    let mut lines: Vec<Line> = Vec::new();
                     sleep(Duration::from_secs(3));
                     for line in stderr_lines {
-                        assert_eq!(line.unwrap(), "hello");
-                        Command::new("bash")
-                            .arg("-c")
-                            .arg("echo stderr >> ./tmp-run_runcs_with_lines")
+                        let line = line.unwrap();
+                        lines.push(Line::from_stdout(&line));
+                        assert_eq!(line, "hello");
+                        command!("bash", "-c", "echo stderr >> ./tmp-run_funcs_with_lines") // col
                             .output()
-                            .unwrap();
+                            .unwrap(); // oops sorry lol
                     }
-                    return Vec::new();
+                    return lines;
                 }
             },
         );
     });
     sleep(Duration::from_secs(2));
-    let f = File::open("./tmp-run_runcs_with_lines").unwrap();
+    let f = File::open("./tmp-run_funcs_with_lines").unwrap();
     let mut buf: [u8; 14] = [0u8; 14];
     f.read_at(&mut buf, 0).unwrap();
     assert_eq!(buf, [115, 116, 100, 111, 117, 116, 10, 0, 0, 0, 0, 0, 0, 0]);
@@ -186,5 +200,12 @@ fn test_run_funcs_with_lines() {
         [115, 116, 100, 111, 117, 116, 10, 115, 116, 100, 101, 114, 114, 10]
     );
 
-    remove_file("./tmp-run_runcs_with_lines").unwrap();
+    remove_file("./tmp-run_funcs_with_lines").unwrap();
+
+    let output = threads.join().unwrap();
+
+    println!("{:?}", output);
+
+    assert_eq!(output.clone().lines().unwrap()[0].content, "hi");
+    assert_eq!(output.lines().unwrap()[1].content, "hello");
 }
