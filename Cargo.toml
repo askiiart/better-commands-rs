@@ -6,6 +6,7 @@ edition = "2021"
 license = "GPL-3.0-only"
 keywords = ["command", "cmd"]
 repository = "https://git.askiiart.net/askiiart/better-commands-rs"
+readme = "README.md"
 
 [profile.release]
 opt-level = 3
