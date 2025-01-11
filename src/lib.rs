@@ -84,6 +84,24 @@ pub struct Line {
     pub content: String,
 }
 
+impl Line {
+    pub fn from_stdout<S: AsRef<String>>(content: S) -> Self {
+        return Line {
+            content: content.as_ref().to_string(),
+            printed_to: LineType::Stdout,
+            time: Instant::now(),
+        };
+    }
+
+    pub fn from_stderr<S: AsRef<String>>(content: S) -> Self {
+        return Line {
+            content: content.as_ref().to_string(),
+            printed_to: LineType::Stderr,
+            time: Instant::now(),
+        };
+    }
+}
+
 impl PartialOrd for Line {
     fn ge(&self, other: &Line) -> bool {
         if self.time >= other.time {
