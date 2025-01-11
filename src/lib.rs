@@ -85,7 +85,7 @@ pub struct Line {
 }
 
 impl Line {
-    pub fn from_stdout<S: AsRef<String>>(content: S) -> Self {
+    pub fn from_stdout<S: AsRef<str>>(content: S) -> Self {
         return Line {
             content: content.as_ref().to_string(),
             printed_to: LineType::Stdout,
@@ -93,7 +93,7 @@ impl Line {
         };
     }
 
-    pub fn from_stderr<S: AsRef<String>>(content: S) -> Self {
+    pub fn from_stderr<S: AsRef<str>>(content: S) -> Self {
         return Line {
             content: content.as_ref().to_string(),
             printed_to: LineType::Stderr,
