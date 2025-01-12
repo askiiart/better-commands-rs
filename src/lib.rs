@@ -167,41 +167,38 @@ pub fn run(command: &mut Command) -> CmdOutput {
     let child_stdout = child.stdout.take().unwrap();
     let child_stderr = child.stderr.take().unwrap();
 
-    let (stdout_tx, stdout_rx) = std::sync::mpsc::channel();
-    let (stderr_tx, stderr_rx) = std::sync::mpsc::channel();
-
     let stdout_lines = BufReader::new(child_stdout).lines();
-    thread::spawn(move || {
+    let stdout_thread = thread::spawn(move || {
+        let mut lines: Vec<Line> = Vec::new();
         for line in stdout_lines {
-            stdout_tx
-                .send(Line {
+            lines.push(Line {
                     content: line.unwrap(),
                     printed_to: LineType::Stdout,
                     time: Instant::now(),
-                })
-                .unwrap();
+            });
         }
+        return lines;
     });
 
     let stderr_lines = BufReader::new(child_stderr).lines();
-    thread::spawn(move || {
+    let stderr_thread = thread::spawn(move || {
+        let mut lines: Vec<Line> = Vec::new();
         for line in stderr_lines {
             let time = Instant::now();
-            stderr_tx
-                .send(Line {
+            lines.push(Line {
                     content: line.unwrap(),
                     printed_to: LineType::Stderr,
                     time: time,
-                })
-                .unwrap();
+            });
         }
+        return lines;
     });
 
     let status = child.wait().unwrap().code();
     let end = Instant::now();
 
-    let mut lines = stdout_rx.into_iter().collect::<Vec<Line>>();
-    lines.append(&mut stderr_rx.into_iter().collect::<Vec<Line>>());
+    let mut lines = stdout_thread.join().unwrap();
+    lines.append(&mut stderr_thread.join().unwrap());
     lines.sort();
 
     return CmdOutput {

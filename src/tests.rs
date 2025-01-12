@@ -6,38 +6,23 @@ use std::{
     hash::{BuildHasher, Hasher, RandomState},
 };
 use std::{fs::File, os::unix::fs::FileExt, thread::sleep};
-use crate::command;
-
-#[macro_export]
-macro_rules! command {
-    ($command:expr, $($args:expr),*) => {
-        {
-            Command::new($command)
-            $(
-                .arg($args)
-            )*
-        }
-    };
-}
 
 /// Tests what stdout prints
 #[test]
 fn stdout_content() {
-    let expected = "[\"helloooooooooo\", \"hiiiiiiiiiiiii\"]";
-    assert_eq!(
-        expected,
-        format!(
-            "{:?}",
-            run(&mut Command::new("echo")
-                .arg("-n")
-                .arg("helloooooooooo\nhiiiiiiiiiiiii"))
-            .stdout()
-            .unwrap()
-            .into_iter()
-            .map(|line| { line.content })
-            .collect::<Vec<String>>()
-        )
-    );
+    let expected = vec!["helloooooooooo".to_string(), "hiiiiiiiiiiiii".to_string()];
+
+    let output = run(Command::new("echo").arg(
+        "helloooooooooo
+hiiiiiiiiiiiii",
+    ))
+    .stdout()
+    .unwrap()
+    .into_iter()
+    .map(|line| line.content)
+    .collect::<Vec<String>>();
+
+    assert_eq!(expected, output);
 }
 
 /// Tests what stderr prints
@@ -111,7 +96,7 @@ fn test_run_funcs() {
                 |stdout_lines| {
                     sleep(Duration::from_secs(1));
                     for _ in stdout_lines {
-                        command!("bash", "-c", "echo stdout >> ./tmp-run_funcs") // col
+                        Command::new("bash").arg("-c").arg("echo stdout >> ./tmp-run_funcs") // col
                             .output()
                             .unwrap();
                     }
@@ -121,7 +106,7 @@ fn test_run_funcs() {
                 |stderr_lines| {
                     sleep(Duration::from_secs(3));
                     for _ in stderr_lines {
-                        command!("bash", "-c", "echo stderr >> ./tmp-run_funcs") // col
+                        Command::new("bash").arg("-c").arg("echo stderr >> ./tmp-run_funcs") // col
                             .output()
                             .unwrap();
                     }
@@ -152,9 +137,7 @@ fn test_run_funcs() {
 fn test_run_funcs_with_lines() {
     let threads = thread::spawn(|| {
         return run_funcs_with_lines(
-            Command::new("bash")
-                .arg("-c")
-                .arg("echo hi; >&2 echo hello"),
+            &mut Command::new("bash").arg("-c").arg("echo hi; >&2 echo hello"),
             {
                 |stdout_lines| {
                     let mut lines: Vec<Line> = Vec::new();
@@ -163,7 +146,7 @@ fn test_run_funcs_with_lines() {
                         let line = line.unwrap();
                         lines.push(Line::from_stdout(&line));
                         assert_eq!(&line, "hi");
-                        command!("bash", "-c", "echo stdout >> ./tmp-run_funcs_with_lines")
+                        Command::new("bash").arg("-c").arg("echo stdout >> ./tmp-run_funcs_with_lines")
                             .output()
                             .unwrap();
                     }
@@ -178,7 +161,7 @@ fn test_run_funcs_with_lines() {
                         let line = line.unwrap();
                         lines.push(Line::from_stdout(&line));
                         assert_eq!(line, "hello");
-                        command!("bash", "-c", "echo stderr >> ./tmp-run_funcs_with_lines") // col
+                        Command::new("bash").arg("-c").arg("echo stderr >> ./tmp-run_funcs_with_lines")
                             .output()
                             .unwrap(); // oops sorry lol
                     }
