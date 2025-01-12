@@ -1,3 +1,49 @@
+//! # Better Commands
+//!
+//! This crate provides the ability to more easily run a [`Command`] while also doing something with its output as it runs, as well as providing some extra functionality:
+//!
+//! - Specifies whether a [`Line`] is printed to stderr or stderr
+//! - Provides a timestamp for each [`Line`]
+//! - Provides timestamps for the command as a whole (start, end, and duration)
+//!
+//! A basic example (see [`run`]):
+//!
+//! ```
+//! use better_commands::run;
+//! use std::process::Command;
+//!
+//! let output = run(Command::new("sleep").arg("1"));
+//! println!("{:?}", output.duration());
+//! ```
+//!
+//! A more complex example - this lets you provide a function to be run using the output from the command in real-time (see [`run_funcs_with_lines`]):
+//!
+//! ```
+//! use better_commands::run_funcs_with_lines;
+//! use better_commands::Line;
+//! use std::process::Command;
+//! let cmd = run_funcs_with_lines(&mut Command::new("echo").arg("hi"), {
+//!     |stdout_lines| { // your function *must* return the lines
+//!         let mut lines = Vec::new();
+//!         for line in stdout_lines {
+//!             lines.push(Line::from_stdout(line.unwrap()));
+//!             /* send line to database */
+//!             }
+//!             return lines;
+//!         }
+//!     },
+//!     {
+//!     |stderr_lines| {
+//!         // this code is for stderr and won't run because echo won't print anything to stderr, so we'll just put this placeholder here
+//!         return Vec::new();
+//!     }
+//! });
+//!
+//! // prints the following: [Line { printed_to: Stdout, time: Instant { tv_sec: 16316, tv_nsec: 283884648 }, content: "hi" }]
+//! // (timestamp varies)
+//! assert_eq!("hi", cmd.lines().unwrap()[0].content);
+//! ```
+
 use std::cmp::Ordering;
 use std::io::{BufRead, BufReader, Lines};
 use std::process::{ChildStderr, ChildStdout, Command, Stdio};
@@ -7,8 +53,13 @@ use std::time::{Duration, Instant};
 mod tests;
 
 /// Holds the output for a command
+///
+/// Features the lines printed (see [`Line`]), the status code, the start time, end time, and duration
+///
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CmdOutput {
+    /// The lines printed by the [`Command`]
+    /// Note: All functions are guaranteed to return either
     lines: Option<Vec<Line>>,
     status_code: Option<i32>,
     start_time: Instant,
@@ -76,7 +127,7 @@ pub enum LineType {
 
 /// A single line from the output of a command
 ///
-/// This contains what the line was printed to (stdout/stderr), a timestamp, and the content of course.
+/// This contains what the line was printed to (stdout/stderr), a timestamp, and the content printed of course.
 #[derive(Debug, Clone, PartialEq, Eq, Ord)]
 pub struct Line {
     pub printed_to: LineType,
@@ -212,6 +263,29 @@ pub fn run(command: &mut Command) -> CmdOutput {
     };
 }
 
+/// Runs a command while simultaneously running a provided [`Fn`] as the command prints line-by-line
+///
+/// The [`CmdOutput`] *will* None; this does *not* handle the lines.
+///
+/// Example:
+///
+/// ```
+/// use better_commands::run_funcs;
+/// use better_commands::Line;
+/// use std::process::Command;
+/// run_funcs(&mut Command::new("echo").arg("hi"), {
+///     |stdout_lines| {
+///         for line in stdout_lines {
+///             /* send line to database */
+///             }
+///         }
+///     },
+///     {
+///     |stderr_lines| {
+///         // this code is for stderr and won't run because echo won't print anything to stderr
+///     }
+/// });
+/// ```
 pub fn run_funcs(
     command: &mut Command,
     stdout_func: impl Fn(Lines<BufReader<ChildStdout>>) -> () + std::marker::Send + 'static,
@@ -249,7 +323,7 @@ pub fn run_funcs(
     };
 }
 
-/// Runs a command while simultaneously running a provided [`Fn`] at the command prints line-by-line
+/// Runs a command while simultaneously running a provided [`Fn`] as the command prints line-by-line, including line handling
 ///
 /// The [`CmdOutput`] *will* contain `Some(lines)`, not a None.
 ///
@@ -260,7 +334,7 @@ pub fn run_funcs(
 /// use better_commands::Line;
 /// use std::process::Command;
 /// let cmd = run_funcs_with_lines(&mut Command::new("echo").arg("hi"), {
-///     |stdout_lines| {
+///     |stdout_lines| { // your function *must* return the lines
 ///         let mut lines = Vec::new();
 ///         for line in stdout_lines {
 ///             lines.push(Line::from_stdout(line.unwrap()));
@@ -279,6 +353,17 @@ pub fn run_funcs(
 /// // prints the following: [Line { printed_to: Stdout, time: Instant { tv_sec: 16316, tv_nsec: 283884648 }, content: "hi" }]
 /// // (timestamp varies)
 /// assert_eq!("hi", cmd.lines().unwrap()[0].content);
+/// ```
+///
+/// In order for the built-in `lines` functionality to work, your function must return the lines like this; if this doesn't work for you, you can use [`run`] or [`run_funcs`] instead.
+/// ```ignore
+/// use better_commands::Line;
+/// 
+/// let mut lines = Vec::new();
+/// for line in stdout_lines {
+///     lines.push(Line::from_stdout(line.unwrap())); // from_stdout/from_stderr depending on which
+/// }
+/// return lines;
 /// ```
 pub fn run_funcs_with_lines(
     command: &mut Command,
