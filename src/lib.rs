@@ -85,6 +85,7 @@ pub struct Line {
 }
 
 impl Line {
+    /// Creates a [`Line`] from a string printed to stdout
     pub fn from_stdout<S: AsRef<str>>(content: S) -> Self {
         return Line {
             content: content.as_ref().to_string(),
@@ -93,6 +94,7 @@ impl Line {
         };
     }
 
+    /// Creates a [`Line`] from a string printed to stderr
     pub fn from_stderr<S: AsRef<str>>(content: S) -> Self {
         return Line {
             content: content.as_ref().to_string(),
@@ -142,7 +144,7 @@ impl PartialOrd for Line {
     }
 }
 
-/// Runs a command, returning a
+/// Runs a command, returning a [`CmdOutput`] (which *will* contain `Some(lines)`, not a None)
 ///
 /// Example:
 ///
@@ -153,7 +155,7 @@ impl PartialOrd for Line {
 ///
 /// // prints the following: [Line { printed_to: Stdout, time: Instant { tv_sec: 16316, tv_nsec: 283884648 }, content: "hi" }]
 /// // (timestamp varies)
-/// println!("{:?}", cmd.lines().unwrap());
+/// assert_eq!("hi", cmd.lines().unwrap()[0].content);
 /// ```
 pub fn run(command: &mut Command) -> CmdOutput {
     // https://stackoverflow.com/a/72831067/16432246
@@ -172,9 +174,9 @@ pub fn run(command: &mut Command) -> CmdOutput {
         let mut lines: Vec<Line> = Vec::new();
         for line in stdout_lines {
             lines.push(Line {
-                    content: line.unwrap(),
-                    printed_to: LineType::Stdout,
-                    time: Instant::now(),
+                content: line.unwrap(),
+                printed_to: LineType::Stdout,
+                time: Instant::now(),
             });
         }
         return lines;
@@ -186,9 +188,9 @@ pub fn run(command: &mut Command) -> CmdOutput {
         for line in stderr_lines {
             let time = Instant::now();
             lines.push(Line {
-                    content: line.unwrap(),
-                    printed_to: LineType::Stderr,
-                    time: time,
+                content: line.unwrap(),
+                printed_to: LineType::Stderr,
+                time: time,
             });
         }
         return lines;
@@ -247,6 +249,37 @@ pub fn run_funcs(
     };
 }
 
+/// Runs a command while simultaneously running a provided [`Fn`] at the command prints line-by-line
+///
+/// The [`CmdOutput`] *will* contain `Some(lines)`, not a None.
+///
+/// Example:
+///
+/// ```
+/// use better_commands::run_funcs_with_lines;
+/// use better_commands::Line;
+/// use std::process::Command;
+/// let cmd = run_funcs_with_lines(&mut Command::new("echo").arg("hi"), {
+///     |stdout_lines| {
+///         let mut lines = Vec::new();
+///         for line in stdout_lines {
+///             lines.push(Line::from_stdout(line.unwrap()));
+///             /* send line to database */
+///             }
+///             return lines;
+///         }
+///     },
+///     {
+///     |stderr_lines| {
+///         // this code is for stderr and won't run because echo won't print anything to stderr, so we'll just put this placeholder here
+///         return Vec::new();
+///     }
+/// });
+///
+/// // prints the following: [Line { printed_to: Stdout, time: Instant { tv_sec: 16316, tv_nsec: 283884648 }, content: "hi" }]
+/// // (timestamp varies)
+/// assert_eq!("hi", cmd.lines().unwrap()[0].content);
+/// ```
 pub fn run_funcs_with_lines(
     command: &mut Command,
     stdout_func: impl Fn(Lines<BufReader<ChildStdout>>) -> Vec<Line> + std::marker::Send + 'static,
