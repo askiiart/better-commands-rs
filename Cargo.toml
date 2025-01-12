@@ -1,7 +1,7 @@
 [package]
 name = "better-commands"
 description = "A better way of running commands - get stdout and stderr together, in order with timestamps, while easily running code as it runs line-by-line"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 license = "GPL-3.0-only"
 keywords = ["command", "cmd"]
