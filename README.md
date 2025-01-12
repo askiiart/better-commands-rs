@@ -5,4 +5,4 @@ A better way of running commands - get stdout and stderr together, in order with
 ## TODO
 
 - Improve docs
-- Add `lines` capability to `run_with_funcs()`
+- Add `lines` capability to `run_funcs()`
