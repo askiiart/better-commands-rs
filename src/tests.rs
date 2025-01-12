@@ -5,7 +5,7 @@ use std::{
     fs::remove_file,
     hash::{BuildHasher, Hasher, RandomState},
 };
-use std::{fs::File, os::unix::fs::FileExt, thread::sleep};
+use std::{fs::File, thread::sleep};
 
 /// Tests what stdout prints
 #[test]
