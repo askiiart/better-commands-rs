@@ -96,7 +96,9 @@ fn test_run_funcs() {
                 |stdout_lines| {
                     sleep(Duration::from_secs(1));
                     for _ in stdout_lines {
-                        Command::new("bash").arg("-c").arg("echo stdout >> ./tmp-run_funcs") // col
+                        Command::new("bash")
+                            .arg("-c")
+                            .arg("echo stdout >> ./tmp-run_funcs") // col
                             .output()
                             .unwrap();
                     }
@@ -106,7 +108,9 @@ fn test_run_funcs() {
                 |stderr_lines| {
                     sleep(Duration::from_secs(3));
                     for _ in stderr_lines {
-                        Command::new("bash").arg("-c").arg("echo stderr >> ./tmp-run_funcs") // col
+                        Command::new("bash")
+                            .arg("-c")
+                            .arg("echo stderr >> ./tmp-run_funcs") // col
                             .output()
                             .unwrap();
                     }
@@ -137,7 +141,9 @@ fn test_run_funcs() {
 fn test_run_funcs_with_lines() {
     let threads = thread::spawn(|| {
         return run_funcs_with_lines(
-            &mut Command::new("bash").arg("-c").arg("echo hi; >&2 echo hello"),
+            &mut Command::new("bash")
+                .arg("-c")
+                .arg("echo hi; >&2 echo hello"),
             {
                 |stdout_lines| {
                     let mut lines: Vec<Line> = Vec::new();
@@ -146,7 +152,9 @@ fn test_run_funcs_with_lines() {
                         let line = line.unwrap();
                         lines.push(Line::from_stdout(&line));
                         assert_eq!(&line, "hi");
-                        Command::new("bash").arg("-c").arg("echo stdout >> ./tmp-run_funcs_with_lines")
+                        Command::new("bash")
+                            .arg("-c")
+                            .arg("echo stdout >> ./tmp-run_funcs_with_lines")
                             .output()
                             .unwrap();
                     }
@@ -161,7 +169,9 @@ fn test_run_funcs_with_lines() {
                         let line = line.unwrap();
                         lines.push(Line::from_stdout(&line));
                         assert_eq!(line, "hello");
-                        Command::new("bash").arg("-c").arg("echo stderr >> ./tmp-run_funcs_with_lines")
+                        Command::new("bash")
+                            .arg("-c")
+                            .arg("echo stderr >> ./tmp-run_funcs_with_lines")
                             .output()
                             .unwrap(); // oops sorry lol
                     }
