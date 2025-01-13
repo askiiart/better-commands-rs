@@ -6,6 +6,7 @@ use std::{
     hash::{BuildHasher, Hasher, RandomState},
 };
 use std::{fs::File, thread::sleep};
+use std::os::unix::fs::FileExt;
 
 /// Tests what stdout prints
 #[test]
