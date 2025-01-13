@@ -251,8 +251,8 @@ pub fn run(command: &mut Command) -> CmdOutput {
 /// ```
 pub fn run_funcs(
     command: &mut Command,
-    stdout_func: impl Fn(Lines<BufReader<ChildStdout>>) -> () + std::marker::Send + 'static,
-    stderr_func: impl Fn(Lines<BufReader<ChildStderr>>) -> () + std::marker::Send + 'static,
+    stdout_func: impl FnOnce(Lines<BufReader<ChildStdout>>) -> () + std::marker::Send + 'static,
+    stderr_func: impl FnOnce(Lines<BufReader<ChildStderr>>) -> () + std::marker::Send + 'static,
 ) -> CmdOutput {
     // https://stackoverflow.com/a/72831067/16432246
     let start = Instant::now();
@@ -330,8 +330,8 @@ pub fn run_funcs(
 /// ```
 pub fn run_funcs_with_lines(
     command: &mut Command,
-    stdout_func: impl Fn(Lines<BufReader<ChildStdout>>) -> Vec<Line> + std::marker::Send + 'static,
-    stderr_func: impl Fn(Lines<BufReader<ChildStderr>>) -> Vec<Line> + std::marker::Send + 'static,
+    stdout_func: impl FnOnce(Lines<BufReader<ChildStdout>>) -> Vec<Line> + std::marker::Send + 'static,
+    stderr_func: impl FnOnce(Lines<BufReader<ChildStderr>>) -> Vec<Line> + std::marker::Send + 'static,
 ) -> CmdOutput {
     // https://stackoverflow.com/a/72831067/16432246
     let start = Instant::now();
