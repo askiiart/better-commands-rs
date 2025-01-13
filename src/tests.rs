@@ -1,12 +1,13 @@
 #[cfg(test)]
 use crate::*;
+use std::io::Write;
+use std::os::unix::fs::FileExt;
 use std::process::Command;
 use std::{
     fs::remove_file,
     hash::{BuildHasher, Hasher, RandomState},
 };
 use std::{fs::File, thread::sleep};
-use std::os::unix::fs::FileExt;
 
 /// Tests what stdout prints
 #[test]
@@ -88,6 +89,8 @@ fn shuffle_vec<T>(vec: &mut [T]) {
 
 #[test]
 fn test_run_funcs() {
+    // TODO: Add error handling to delete the file on exit
+    File::create_new("./tmp-run_funcs").unwrap();
     let threads = thread::spawn(|| {
         return run_funcs(
             Command::new("bash")
@@ -97,11 +100,12 @@ fn test_run_funcs() {
                 |stdout_lines| {
                     sleep(Duration::from_secs(1));
                     for _ in stdout_lines {
-                        Command::new("bash")
-                            .arg("-c")
-                            .arg("echo stdout >> ./tmp-run_funcs") // col
-                            .output()
+                        let mut f = File::options()
+                            .write(true)
+                            .open("./tmp-run_funcs")
                             .unwrap();
+                        f.write_all(b"stdout\n").unwrap();
+                        drop(f);
                     }
                 }
             },
@@ -109,11 +113,12 @@ fn test_run_funcs() {
                 |stderr_lines| {
                     sleep(Duration::from_secs(3));
                     for _ in stderr_lines {
-                        Command::new("bash")
-                            .arg("-c")
-                            .arg("echo stderr >> ./tmp-run_funcs") // col
-                            .output()
+                        let f = File::options()
+                            .write(true)
+                            .open("./tmp-run_funcs")
                             .unwrap();
+                        f.write_at(b"stderr\n", 7).unwrap();
+                        drop(f);
                     }
                 }
             },
@@ -140,6 +145,8 @@ fn test_run_funcs() {
 
 #[test]
 fn test_run_funcs_with_lines() {
+    // TODO: Add error handling to delete the file on exit
+    File::create_new("./tmp-run_funcs_with_lines").unwrap();
     let threads = thread::spawn(|| {
         return run_funcs_with_lines(
             &mut Command::new("bash")
@@ -153,11 +160,12 @@ fn test_run_funcs_with_lines() {
                         let line = line.unwrap();
                         lines.push(Line::from_stdout(&line));
                         assert_eq!(&line, "hi");
-                        Command::new("bash")
-                            .arg("-c")
-                            .arg("echo stdout >> ./tmp-run_funcs_with_lines")
-                            .output()
+                        let mut f = File::options()
+                            .write(true)
+                            .open("./tmp-run_funcs_with_lines")
                             .unwrap();
+                        f.write_all(b"stdout\n").unwrap();
+                        drop(f);
                     }
                     return lines;
                 }
@@ -170,11 +178,13 @@ fn test_run_funcs_with_lines() {
                         let line = line.unwrap();
                         lines.push(Line::from_stdout(&line));
                         assert_eq!(line, "hello");
-                        Command::new("bash")
-                            .arg("-c")
-                            .arg("echo stderr >> ./tmp-run_funcs_with_lines")
-                            .output()
-                            .unwrap(); // oops sorry lol
+                        let mut f = File::options()
+                            .write(true)
+                            .append(true)
+                            .open("./tmp-run_funcs_with_lines")
+                            .unwrap();
+                        f.write(b"stderr\n").unwrap();
+                        drop(f);
                     }
                     return lines;
                 }
@@ -182,17 +192,13 @@ fn test_run_funcs_with_lines() {
         );
     });
     sleep(Duration::from_secs(2));
-    let f = File::open("./tmp-run_funcs_with_lines").unwrap();
-    let mut buf: [u8; 14] = [0u8; 14];
-    f.read_at(&mut buf, 0).unwrap();
-    assert_eq!(buf, [115, 116, 100, 111, 117, 116, 10, 0, 0, 0, 0, 0, 0, 0]);
+    let read = std::fs::read_to_string("tmp-run_funcs_with_lines").unwrap();
+    assert_eq!(read, "stdout\n");
 
     sleep(Duration::from_secs(2));
-    f.read_at(&mut buf, 0).unwrap();
-    assert_eq!(
-        buf,
-        [115, 116, 100, 111, 117, 116, 10, 115, 116, 100, 101, 114, 114, 10]
-    );
+    let read = std::fs::read_to_string("tmp-run_funcs_with_lines").unwrap();
+    assert_eq!(read, "stdout\nstderr\n");
+
 
     remove_file("./tmp-run_funcs_with_lines").unwrap();
 
